@@ -1,5 +1,11 @@
 use std::fmt::{self, Write};
 
+const SPDX_HEADER: &str = r#"# SPDX-FileCopyrightText: (C) 2026 Institute of Software, Chinese Academy of Sciences (ISCAS)
+# SPDX-FileCopyrightText: (C) 2026 openRuyi Project Contributors
+#
+# SPDX-License-Identifier: MulanPSL-2.0
+"#;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CapabilityVersion {
     None,
@@ -40,6 +46,7 @@ pub struct SpecSource {
     pub source_url: String,
     pub sha256: Option<String>,
     pub build_requires: Vec<String>,
+    pub with_spdx: bool,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -131,6 +138,10 @@ pub fn render_crate_requires(req: &CrateRequirement) -> String {
 }
 
 pub fn render_header_section<W: Write>(out: &mut W, source: &SpecSource) -> fmt::Result {
+    if source.with_spdx {
+        write!(out, "{}", SPDX_HEADER)?;
+        writeln!(out)?;
+    }
     writeln!(out, "%global crate_name {}", source.crate_name)?;
     writeln!(out, "%global full_version {}", source.full_version)?;
     writeln!(out, "%global pkgname {}", source.pkgname)?;
@@ -303,6 +314,7 @@ mod tests {
                 source_url: "https://static.crates.io/crates/%{crate_name}/%{full_version}/download#/%{name}-%{version}.tar.gz".to_string(),
                 sha256: None,
                 build_requires: vec!["rust-rpm-macros".to_string()],
+                with_spdx: false,
             },
             main_package: SpecPackage {
                 description: "Main package".to_string(),
@@ -344,6 +356,7 @@ mod tests {
         };
 
         let rendered = spec.render();
+        assert!(!rendered.starts_with("# SPDX-FileCopyrightText:"));
         assert!(rendered.contains("Provides:       crate(%{pkgname}) = %{version}"));
         assert!(rendered.contains("%package     -n %{name}+default"));
         assert!(rendered.contains("Provides:       crate(%{pkgname}/default) = %{version}"));
@@ -351,5 +364,36 @@ mod tests {
         assert!(rendered.contains("%package     -n %{name}+rc"));
         assert!(rendered.contains("Provides:       crate(%{pkgname}/rc) = %{version}"));
         assert!(rendered.contains("Requires:       crate(base64-0.22) >= 0.22.1"));
+    }
+
+    #[test]
+    fn renders_spdx_header_only_when_enabled() {
+        let mut spec = RpmSpec {
+            source: SpecSource {
+                crate_name: "serde".to_string(),
+                full_version: "1.0.0".to_string(),
+                pkgname: "serde-1".to_string(),
+                rpm_name: "rust-serde-1".to_string(),
+                rpm_version: "1.0.0".to_string(),
+                summary: "Rust crate \"serde\"".to_string(),
+                license: "MIT OR Apache-2.0".to_string(),
+                url: "https://example.invalid/serde".to_string(),
+                source_url: "https://example.invalid/source".to_string(),
+                sha256: None,
+                build_requires: vec![],
+                with_spdx: false,
+            },
+            main_package: SpecPackage {
+                description: "Main package".to_string(),
+                ..SpecPackage::default()
+            },
+            feature_packages: vec![],
+            files: vec![],
+            changelog: false,
+        };
+
+        assert!(!spec.render().contains("SPDX-License-Identifier"));
+        spec.source.with_spdx = true;
+        assert!(spec.render().starts_with("# SPDX-FileCopyrightText:"));
     }
 }

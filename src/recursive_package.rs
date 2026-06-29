@@ -15,9 +15,6 @@ pub struct RecursivePackageArgs {
     /// Version of the crate to package; may contain dependency operators.
     /// If empty string or omitted, resolves to the latest version.
     pub version: Option<String>,
-    /// TOML file providing package-specific options.
-    #[arg(long)]
-    pub config: Option<PathBuf>,
     /// Output root directory. Each package is generated under this root.
     #[arg(short = 'o', long, value_name = "OUT_ROOT")]
     pub output: Option<PathBuf>,
@@ -83,7 +80,6 @@ impl RecursivePackager {
         &mut self,
         crate_name: &str,
         version: Option<&str>,
-        config_path: Option<PathBuf>,
     ) -> Result<()> {
         println!("crate_name is {}", crate_name);
         let version_str = version.unwrap_or("latest");
@@ -148,7 +144,7 @@ impl RecursivePackager {
         // Try to package this crate
         // If crate_name contains '-', try both '-' and '_' versions
         let (_spec_path, _real_crate_name, dependencies) =
-            match self.package_single_crate(crate_name, version, config_path.clone()) {
+            match self.package_single_crate(crate_name, version) {
                 Ok((path, real_name, deps)) => {
                     println!(
                         "Successfully packaged {} {} (real name: {})",
@@ -176,7 +172,7 @@ impl RecursivePackager {
                             crate_name, alt_name
                         );
 
-                        match self.package_single_crate(&alt_name, version, config_path.clone()) {
+                        match self.package_single_crate(&alt_name, version) {
                             Ok((path, real_name, deps)) => {
                                 println!(
                                     "Successfully packaged {} {} (as {}, real name: {})",
@@ -238,11 +234,7 @@ impl RecursivePackager {
 
         // Recursively process each dependency
         for (real_dep_name, dep_version) in deps_with_real_names {
-            self.process_crate_recursive(
-                &real_dep_name,
-                dep_version.as_deref(),
-                config_path.clone(),
-            )?;
+            self.process_crate_recursive(&real_dep_name, dep_version.as_deref())?;
         }
 
         Ok(())
@@ -253,7 +245,6 @@ impl RecursivePackager {
         &self,
         crate_name: &str,
         version: Option<&str>,
-        config_path: Option<PathBuf>,
     ) -> Result<PackagedCrate> {
         let pkg_base = format!("rust-{}", crate_name.replace('_', "-"));
 
@@ -269,7 +260,6 @@ impl RecursivePackager {
         let init_args = PackageInitArgs {
             crate_name: crate_name.to_string(),
             version: version.map(|s| s.to_string()),
-            config: config_path,
         };
 
         let extract_args = PackageExtractArgs {
@@ -280,6 +270,7 @@ impl RecursivePackager {
             changelog_ready: false,
             copyright_guess_harder: false,
             no_overlay_write_back: true,
+            with_spdx: false,
             lockfile_deps: None, // recursive command uses Cargo.toml dependencies
         };
 

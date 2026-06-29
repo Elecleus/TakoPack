@@ -32,6 +32,7 @@ pub struct Source {
     crate_name: String,
     license: String,
     sha256: Option<String>, // SHA256 hash of the downloaded crate file
+    with_spdx: bool,
 }
 
 pub struct Package {
@@ -261,6 +262,7 @@ impl fmt::Display for Source {
             source_url: "https://static.crates.io/crates/%{crate_name}/%{full_version}/download#/%{name}-%{version}.tar.gz".to_string(),
             sha256: self.sha256.clone(),
             build_requires: vec!["rust-rpm-macros".to_string()],
+            with_spdx: self.with_spdx,
         };
 
         spec::render_header_section(f, &source)?;
@@ -709,6 +711,7 @@ impl Source {
             crate_name: crate_name.to_string(),
             license: license.to_string(),
             sha256,
+            with_spdx: false,
         })
     }
 
@@ -716,7 +719,7 @@ impl Source {
         &self.name
     }
 
-    pub fn apply_overrides(&mut self, config: &Config) {
+    pub fn apply_overrides(&mut self, config: &Config, with_spdx: bool) {
         if let Some(section) = config.section() {
             self.section = section.to_string();
         }
@@ -773,6 +776,8 @@ impl Source {
         if let Some(vcs_browser) = config.vcs_browser() {
             self.vcs_browser = vcs_browser.to_string();
         }
+
+        self.with_spdx = with_spdx;
     }
 }
 

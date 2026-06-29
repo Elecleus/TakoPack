@@ -321,6 +321,7 @@ pub fn prepare_takopack_folder(
     overlay_write_back: bool,
     sha256: Option<String>, // SHA256 hash of downloaded crate
     lockfile_deps: Option<std::collections::HashMap<String, semver::Version>>, // Optional: dependencies from Cargo.lock
+    with_spdx: bool,
 ) -> Result<()> {
     let mut create = fs::OpenOptions::new();
     create.write(true).create_new(true);
@@ -365,6 +366,7 @@ pub fn prepare_takopack_folder(
         sha256,
         lockfile_deps.as_ref(),
         &mut file,
+        with_spdx,
     )?;
 
     // for testing only, takopack/takopack_testing_bin/env
@@ -467,6 +469,7 @@ fn prepare_takopack_control<F: FnMut(&str) -> std::result::Result<fs::File, io::
     sha256: Option<String>, // SHA256 hash of downloaded crate
     lockfile_deps: Option<&HashMap<String, semver::Version>>, // Optional lockfile dependencies
     mut file: F,
+    with_spdx: bool,
 ) -> Result<(Source, bool, bool)> {
     let crate_name = crate_info.crate_name();
     let deb_upstream_version = deb_info.deb_upstream_version();
@@ -475,7 +478,8 @@ fn prepare_takopack_control<F: FnMut(&str) -> std::result::Result<fs::File, io::
 
     let lib = crate_info.is_lib();
     let (bins, bin_name) = selected_binary_targets(crate_info, deb_info, config, lib);
-    let prepared = prepare_control_source(deb_info, crate_info, config, sha256, lib, &bins)?;
+    let prepared =
+        prepare_control_source(deb_info, crate_info, config, sha256, lib, &bins, with_spdx)?;
 
     let output_names = util::rust_crate_output_names(crate_name, crate_info.version());
     let mut control = io::BufWriter::new(file(&output_names.spec_file)?);
@@ -579,6 +583,7 @@ fn prepare_control_source(
     sha256: Option<String>,
     lib: bool,
     bins: &[&str],
+    with_spdx: bool,
 ) -> Result<PreparedControl> {
     let crate_name = crate_info.crate_name();
     let features_with_deps = all_dependencies_and_features(crate_info.manifest())?;
@@ -614,7 +619,7 @@ fn prepare_control_source(
         full_version,
         sha256,
     )?;
-    source.apply_overrides(config);
+    source.apply_overrides(config, with_spdx);
 
     let (crate_summary, crate_description) = crate_info.get_summary_description();
     let summary_prefix = crate_summary.unwrap_or(format!("Rust crate \"{}\"", crate_name));

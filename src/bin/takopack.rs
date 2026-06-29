@@ -114,11 +114,7 @@ fn real_main() -> Result<i32> {
                 CargoOpt::Vendor { args } => {
                     log::info!("starting vendor operation (recursive packaging)");
                     let mut packager = RecursivePackager::new(args.output)?;
-                    packager.process_crate_recursive(
-                        &args.crate_name,
-                        args.version.as_deref(),
-                        args.config,
-                    )?;
+                    packager.process_crate_recursive(&args.crate_name, args.version.as_deref())?;
                     packager.print_summary();
                     Ok(0)
                 }
@@ -146,6 +142,18 @@ fn real_main() -> Result<i32> {
                         range_capability_policy,
                     )?;
                     Ok(0)
+                }
+                CargoOpt::RegistrySync { dry_run, jobs } => {
+                    log::info!("starting registry sync");
+                    takopack::registry_sync::run_registry_sync(dry_run, jobs)
+                }
+                CargoOpt::ResolveCheck { path, registry } => {
+                    log::info!("starting resolve check");
+                    takopack::resolve_check::run_resolve_check(&path, registry.as_deref())
+                }
+                CargoOpt::BuildReqs { path, registry } => {
+                    log::info!("generating dynamic BuildRequires");
+                    takopack::dynamic_buildreqs::run_buildreqs(&path, registry.as_deref())
                 }
             }
         }

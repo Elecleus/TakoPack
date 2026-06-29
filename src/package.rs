@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use anyhow::Context;
-
 use clap::{crate_version, Parser};
 
 use crate::config::{Config, PackageKey};
@@ -32,9 +30,6 @@ pub struct PackageInitArgs {
     /// Version of the crate to package; may contain dependency operators.
     /// If empty string or omitted, resolves to the latest version.
     pub version: Option<String>,
-    /// TOML file providing package-specific options.
-    #[arg(long)]
-    pub config: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Parser)]
@@ -56,6 +51,9 @@ pub struct PackageExecuteArgs {
     /// Don't write back hint files or d/changelog to the source overlay directory.
     #[arg(long)]
     pub no_overlay_write_back: bool,
+    /// Include TakoPack's built-in SPDX header in generated spec files.
+    #[arg(long)]
+    pub with_spdx: bool,
     /// Optional: Dependencies from Cargo.lock for accurate spec generation
     /// (used by track command, None for pkg/batch commands)
     #[arg(skip)]
@@ -100,15 +98,7 @@ impl PackageProcess {
     pub fn init(init_args: PackageInitArgs) -> Result<Self> {
         let crate_name = &init_args.crate_name;
         let version = init_args.version.as_deref();
-        let config = init_args.config;
-
-        let (config_path, config) = match config {
-            Some(path) => {
-                let config = Config::parse(&path).context("failed to parse takopack.toml")?;
-                (Some(path), config)
-            }
-            None => (None, Config::default()),
-        };
+        let (config_path, config) = Config::load()?;
 
         let crate_path = config.crate_src_path(config_path.as_deref());
         let crate_info = match crate_path {
@@ -234,6 +224,7 @@ impl PackageProcess {
             !args.no_overlay_write_back,
             sha256.clone(),
             args.lockfile_deps, // Pass lockfile dependencies
+            args.with_spdx,
         )?;
 
         // stage finished; set vars
@@ -270,7 +261,7 @@ impl PackageProcess {
             takopack_warn!("");
             takopack_warn!("To fix, try combinations of the following: ");
             match config_path.as_deref() {
-                None => takopack_warn!("\t •  Write a config file and use it with --config"),
+                None => takopack_warn!("\t •  Write overrides in takopack.toml"),
                 Some(c) => {
                     takopack_warn!("\t •  Add or edit overrides in your config file:");
                     takopack_warn!("\t    {}", util::rel_p(c, &curdir));

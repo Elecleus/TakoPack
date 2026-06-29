@@ -74,7 +74,6 @@ pub fn parse_dependencies_from_toml(toml_path: &Path, output_dir: Option<PathBuf
         if let Err(e) = packager.process_crate_recursive(
             dep_name, // Use the original name with dashes
             version.as_deref(),
-            None,
         ) {
             eprintln!("Failed to process {}: {:#}", dep_name, e);
         }

@@ -579,7 +579,6 @@ pub fn process_single_crate(
         let init_args = PackageInitArgs {
             crate_name: crate_name.to_string(),
             version: Some(version.to_string()),
-            config: None,
         };
 
         let extract_args = PackageExtractArgs {
@@ -599,6 +598,7 @@ pub fn process_single_crate(
             changelog_ready: false,
             copyright_guess_harder: false,
             no_overlay_write_back: false,
+            with_spdx: false,
             lockfile_deps, // Pass lockfile dependencies
         };
 
