@@ -27,7 +27,7 @@ use tempfile;
 
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
 use std::{self, ffi::OsStr};
 
@@ -160,7 +160,11 @@ fn ver_req_to_ver(dep: &Dependency) -> Option<Version> {
 }
 
 pub fn show_dep(dep: &Dependency) -> String {
-    format!("{} {}", dep.package_name(), dep.version_req())
+    // Cargo's VersionReq Display uses compact form ("=1.0"); add a space after
+    // comparison operators for readability ("= 1.0").
+    let req = dep.version_req().to_string();
+    let req = req.replacen('=', "= ", 1);
+    format!("{} {}", dep.package_name(), req)
 }
 
 impl CrateInfo {
@@ -812,7 +816,10 @@ impl CrateInfo {
             let file = files
                 .first()
                 .ok_or_else(|| format_err!("No canonicalized archives found.."))?;
-            let mut archive = Archive::new(GzDecoder::new(file.file()));
+            // cargo leaves the FileLock cursor at EOF after writing the .crate
+            let mut crate_file = file.file();
+            crate_file.seek(SeekFrom::Start(0))?;
+            let mut archive = Archive::new(GzDecoder::new(crate_file));
 
             for entry in archive.entries()? {
                 let mut entry = entry?;
