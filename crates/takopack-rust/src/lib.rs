@@ -36,3 +36,5 @@ pub use crates::{
     LoadOptions, LocalPathSource, LockPackage, ManifestSource, RegistrySource, Result, Source,
     TargetKind, TargetModel, load_crate, transitive_crate_deps,
 };
+
+pub mod cargo;
