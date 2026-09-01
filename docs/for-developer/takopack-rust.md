@@ -15,3 +15,9 @@ takopack-rust crate 是 libtakopack 系列中的 Rust 生态系统相关组件�
 1. 为核心功能设计符合 Rust 风格的入口。
 2. 实现各功能模块的清晰分层，以可读性和可维护性作为目标。
 3. 所依赖的 crates 尽量最少和最小化。
+
+## Modules
+
+### 'cargo'
+
+使用 Cargo 构建系统和 crates.io 的项目相关的解析，同时也是重构后的入口，新开发的功能应以此为基础。
