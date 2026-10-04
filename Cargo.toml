@@ -24,6 +24,7 @@ futures = { version = "0.3" }
 git2 = { version = ">= 0.19, < 0.21" }
 glob = { version = "0.3" }
 itertools = { version = "0.13" }
+jsonl = { version = "4.0.1" }
 log = { version = "0.4" }
 nu-ansi-term = { version = "0.50" }
 regex = { version = "1.0" }

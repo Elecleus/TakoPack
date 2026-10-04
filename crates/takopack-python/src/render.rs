@@ -5,13 +5,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use takopack_core::error::Result as CoreResult;
+
 use crate::pypi::{Pypi, package::PypiInfo};
 
 impl<'a> Pypi<'a> {
-    pub fn render(&self, package_dir: &Path) -> Result<(), std::io::Error> {
+    pub fn render(&self, package_dir: &Path) -> CoreResult<()> {
         let srcname = &self.name().trim().to_lowercase().replace(['_', '.'], "-");
 
-        let extracted_root = self.extract_tar_gz()?;
+        let extracted_root = self.extract()?;
         let mut meta = SpecMeta {
             summary: self.info().summary.clone(),
             license: resolve_license_from_info(self.info()),

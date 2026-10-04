@@ -257,6 +257,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
+name = "camino"
+version = "1.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbad30e4b4c14a39e3cc8aed085a12a327257c316619c93581e017bc52be591"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
 name = "cargo"
 version = "0.97.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -458,6 +467,20 @@ dependencies = [
  "supports-hyperlinks",
  "supports-unicode",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "cargo_metadata"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef987d17b0a113becdd19d3d0022d04d7ef41f9efe4f3fb63ac44ba61df3ade9"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2321,9 +2344,9 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "1.4.2"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6970f50e31d6fc17d3fa27329444bfa74e196cf62e95052a3f6fee181dba6425"
+checksum = "918d3568bebf352712bc2ef3d46a8bcf1a75b373be6539de198e9105cbbf9ce0"
 dependencies = [
  "bytes",
  "itoa",
@@ -2626,6 +2649,17 @@ dependencies = [
  "cfg-if",
  "once_cell",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "jsonl"
+version = "4.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1abae98f45234fc1980c198798166a80ad6b35eb5b7db4caa7bc72ff919e6b80"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3969,13 +4003,18 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dirs",
+ "flate2",
  "itertools 0.13.0",
+ "jsonl",
  "log",
  "nu-ansi-term",
  "semver",
  "serde",
+ "serde_json",
+ "tar",
  "tempfile",
  "toml 0.8.23",
+ "ureq",
  "walkdir",
 ]
 
@@ -3984,14 +4023,12 @@ name = "takopack-python"
 version = "0.2.0"
 dependencies = [
  "clap",
- "flate2",
  "regex",
  "serde",
  "serde_json",
  "serde_path_to_error",
  "sha2 0.10.9",
  "takopack-core",
- "tar",
  "tempfile",
  "toml 0.8.23",
  "ureq",
@@ -4004,6 +4041,7 @@ dependencies = [
  "anyhow",
  "cargo",
  "cargo-util-terminal",
+ "cargo_metadata",
  "clap",
  "filetime",
  "flate2",
@@ -4418,6 +4456,8 @@ dependencies = [
  "once_cell",
  "rustls",
  "rustls-pki-types",
+ "serde",
+ "serde_json",
  "url",
  "webpki-roots 0.26.11",
 ]
