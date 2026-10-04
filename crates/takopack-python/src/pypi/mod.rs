@@ -7,6 +7,7 @@ use std::{
 };
 
 use package::PypiPackage;
+use takopack_core::{error::Result as CoreResult, tarball::extract_tar_gz};
 use tempfile::TempDir;
 
 use crate::pypi::{
@@ -124,18 +125,7 @@ impl<'a> Pypi<'a> {
         &self.temp_resource.tarball_path
     }
 
-    pub fn extract_tar_gz(&self) -> Result<PathBuf, std::io::Error> {
-        use flate2::read::GzDecoder;
-        use tar::Archive;
-
-        fn extract_tar_gz(archive_path: &Path, extract_dir: &Path) -> Result<(), std::io::Error> {
-            let f = std::fs::File::open(archive_path)?;
-            let gz = GzDecoder::new(f);
-            let mut tar = Archive::new(gz);
-            tar.unpack(extract_dir)?;
-            Ok(())
-        }
-
+    pub fn extract(&self) -> CoreResult<PathBuf> {
         fn detect_extract_root(extract_dir: &Path) -> Result<PathBuf, std::io::Error> {
             let entries = fs::read_dir(extract_dir)?;
             let mut dirs = Vec::new();

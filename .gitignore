@@ -8,3 +8,5 @@ parser*
 *.codex/*
 rust-*
 *.txt
+
+.vscode/
