@@ -7,6 +7,8 @@
 //!
 //! You might want to read https://crates.io/data-access first.
 
-mod extracted;
-mod fetched;
-pub mod fetcher;
+mod crates_io;
+mod error;
+mod prepared;
+
+pub use crates_io::FromCratesIo;

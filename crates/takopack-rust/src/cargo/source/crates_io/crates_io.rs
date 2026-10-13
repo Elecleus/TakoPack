@@ -1,32 +1,34 @@
-use serde::Deserialize;
-use takopack_core::{error::Error as CoreError, network::fetch_jsonl};
+use std::path::Path;
 
-use super::fetched::FromCratesIo;
+use takopack_core::{error::Error as CoreError, network::fetch_jsonl, tarball::extract_tar_gz};
 
-pub struct CratesIoFetcher {
+use crate::cargo::source::crates_io::{error::Error, prepared::PreparedCrate};
+
+pub struct FromCratesIo {
     name: String,
     version: Option<String>,
-
-    pub(super) _tempdir: Option<tempfile::TempDir>,
 }
 
-impl CratesIoFetcher {
-    pub fn new(name: &str, version: Option<&str>) -> Self {
+impl FromCratesIo {
+    pub fn new(name: String) -> Self {
         Self {
-            name: name.to_string(),
-            version: version.map(|s| s.to_string()),
-            _tempdir: None,
+            name,
+            version: None,
         }
     }
 
-    pub fn fetch(self) -> Result<FromCratesIo, Error> {
-        let tempdir = tempfile::TempDir::new()?;
+    pub fn version(&mut self, version: String) -> &mut Self {
+        self.version = Some(version);
+        self
+    }
 
-        let data_from_sprase_index = fetch_data_from_sprase_index(&self.name)?;
+    pub fn latest(&mut self) -> Result<&mut Self, Error> {
+        let mut data_from_sprase_index = fetch_data_from_sprase_index(&self.name)?
+            .into_iter()
+            .filter(|info| !info.yanked);
 
         let crate_info = match self.version.as_deref() {
             Some(v) => data_from_sprase_index
-                .into_iter()
                 .find(|c: &CrateInfo| c.vers == v) // We believe crates.io gives no duplicated version.
                 .ok_or_else(|| Error::VersionNotFound {
                     name: self.name.to_owned(),
@@ -34,59 +36,41 @@ impl CratesIoFetcher {
                 }),
             // Assume that the last one crateinfo matches the latest version.
             None => data_from_sprase_index
-                .into_iter()
                 .last()
                 .ok_or_else(|| Error::CrateNotFound {
                     name: self.name.to_owned(),
                 }),
         }?;
 
-        let version = crate_info.vers;
-        let id = format!("{}-{}", self.name, version);
-        let filename = format!("{}.crate", &id);
+        Ok(self.version(crate_info.vers))
+    }
+
+    pub fn prepare(&mut self, base_dir: impl AsRef<Path>) -> Result<PreparedCrate, Error> {
+        let base_dir = base_dir.as_ref();
+
+        let name = self.name.clone();
+        let version = self.version.clone().ok_or(Error::VersionNotSet)?;
+        let id = format!("{}-{}", &name, &version);
+
+        let filename = id.to_owned() + ".crate";
 
         takopack_core::network::fetch_binary(
             &filename,
-            tempdir.path(),
+            &base_dir,
             &format!("https://static.crates.io/crates/{}/{}", self.name, filename),
         )?;
 
-        Ok(FromCratesIo::new(
-            &id,
-            tempdir.path().join(&filename),
-            tempdir,
+        let archive = base_dir.join(&filename);
+        let extract_dir = base_dir.join(&id);
+
+        extract_tar_gz(&archive, &extract_dir)?;
+
+        Ok(PreparedCrate::new(
+            name,
+            version,
+            archive,
+            extract_dir.join(&id),
         ))
-    }
-}
-
-#[derive(Debug)]
-pub enum Error {
-    CoreFunc(CoreError),
-    VersionNotFound { name: String, version: String },
-    CrateNotFound { name: String },
-}
-
-impl std::error::Error for Error {}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::CoreFunc(error) => error.fmt(f),
-            Error::VersionNotFound { name, version } => write!(f, "{}-{} not found", name, version),
-            Error::CrateNotFound { name } => write!(f, "crate {} not found", name),
-        }
-    }
-}
-
-impl From<takopack_core::error::Error> for Error {
-    fn from(value: takopack_core::error::Error) -> Self {
-        Self::CoreFunc(value)
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(value: std::io::Error) -> Self {
-        value.into()
     }
 }
 
@@ -135,9 +119,11 @@ fn sprase_index_url(name: &str) -> String {
     result
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 struct CrateInfo {
     pub vers: String,
+    pub cksum: String,
+    pub yanked: bool,
 }
 
 #[cfg(test)]

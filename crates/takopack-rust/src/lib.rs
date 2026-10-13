@@ -38,3 +38,4 @@ pub use crates::{
 };
 
 pub mod cargo;
+pub mod pkgdata;

@@ -4,9 +4,11 @@ use anyhow::Result;
 use cargo_metadata::CargoOpt;
 use clap::{Parser, Subcommand};
 use takopack_rust::cargo::{
-    cargo_dir::StructuredCargoDir,
-    source::{CratesIoFetcher, local_dir::LocalCargoDir, manifest::SingleManifestFile},
+    cargo_dir::CargoDir,
+    process::Process,
+    source::{CargoSource, crates_io::FromCratesIo},
 };
+use tempfile::TempDir;
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -16,31 +18,31 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    Local {
-        path: PathBuf,
-    },
     CratesIo {
         name: String,
         version: Option<String>,
-    },
-    Manifest {
-        path: PathBuf,
     },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let dir: StructuredCargoDir = match cli.command {
-        Commands::Local { path } => LocalCargoDir::new(path).into(),
-        Commands::CratesIo { name, version } => CratesIoFetcher::new(&name, version.as_deref())
-            .fetch()?
-            .extract()?
-            .into(),
-        Commands::Manifest { path } => SingleManifestFile::new(&path).materialize().into(),
+    let tempdir = TempDir::with_prefix("takopack")?;
+
+    let source = match cli.command {
+        Commands::CratesIo { name, version } => {
+            let mut s = FromCratesIo::new(name);
+            if let Some(version) = version {
+                s.version(version);
+            } else {
+                s.latest()?;
+            };
+
+            Box::new(s.prepare(&tempdir)?)
+        }
     };
 
-    println!("{:#?}", dir.get_metadata(CargoOpt::AllFeatures));
+    let process = Process::from(source, tempdir).load().unwrap();
 
     Ok(())
 }
