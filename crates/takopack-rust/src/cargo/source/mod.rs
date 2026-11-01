@@ -1,7 +1,7 @@
 pub mod crates_io;
 
 use std::{
-    fs::{File, read_dir},
+    fs::File,
     io,
     path::{Path, PathBuf},
 };
@@ -12,6 +12,7 @@ use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone)]
 pub struct SourceArchive {
+    pub id: String,
     pub path: PathBuf,
     /// sha256sum
     pub checksum: String,
@@ -23,13 +24,14 @@ pub struct SourceArchive {
 }
 
 impl SourceArchive {
-    pub fn try_new(path: &impl AsRef<Path>, url: &str) -> Result<Self, io::Error> {
+    pub fn try_new(id: &str, path: &impl AsRef<Path>, url: &str) -> Result<Self, io::Error> {
         let mut file = File::open(path)?;
         let mut hasher = Sha256::new();
 
         std::io::copy(&mut file, &mut hasher)?;
         let checksum = format!("{:x}", hasher.finalize());
         Ok(Self {
+            id: id.to_string(),
             path: path.as_ref().to_path_buf(),
             checksum,
             url: url.to_string(),
@@ -37,6 +39,7 @@ impl SourceArchive {
     }
 
     pub fn try_new_hashchecked(
+        id: &str,
         path: &impl AsRef<Path>,
         url: &str,
         expected_cksum: &str,
@@ -49,6 +52,7 @@ impl SourceArchive {
 
         if checksum == expected_cksum {
             Ok(Self {
+                id: id.to_string(),
                 path: path.as_ref().to_path_buf(),
                 checksum,
                 url: url.to_string(),
@@ -64,16 +68,13 @@ impl SourceArchive {
     /// Load/Extract the source cargo dir, returning the path of `Cargo.toml`.
     pub fn extract(&self) -> Result<PathBuf, std::io::Error> {
         // [TODO] Learning from cargo needed.
+        // [TODO] Rewrite into `extract()
         let archive_path = &self.path;
         let extract_dir = self.path.parent().unwrap();
 
         takopack_core::tarball::extract_tar_gz(archive_path, extract_dir)?;
 
-        let subdir = read_dir(extract_dir)?
-            .last()
-            .transpose()?
-            .map(|entry| entry.path())
-            .unwrap();
+        let subdir = extract_dir.join(&self.id);
         let cargo_toml_path = subdir.join("Cargo.toml");
         if cargo_toml_path.exists() {
             Ok(cargo_toml_path)

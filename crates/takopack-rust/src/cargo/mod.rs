@@ -3,4 +3,3 @@
 pub mod cargo_dir;
 pub mod process;
 pub mod source;
-pub mod metadata;
