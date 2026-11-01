@@ -1,7 +1,4 @@
-use std::{
-    cell::OnceCell,
-    path::{Path, PathBuf},
-};
+use std::cell::OnceCell;
 
 use crate::cargo::source::{
     CargoSource, SourceArchive,
@@ -13,7 +10,6 @@ pub struct FromCratesIo {
     info: CrateInfo,
 
     archive: OnceCell<SourceArchive>,
-    cargo_toml_path: OnceCell<PathBuf>,
 }
 
 impl FromCratesIo {
@@ -21,7 +17,6 @@ impl FromCratesIo {
         Self {
             info,
             archive: OnceCell::new(),
-            cargo_toml_path: OnceCell::new(),
         }
     }
 }
@@ -49,19 +44,12 @@ impl CargoSource for FromCratesIo {
 
             takopack_core::network::fetch_binary(&path, &url)?;
 
-            let archive = SourceArchive::try_new_hashchecked(&path, &url, &self.info.cksum)?;
+            let archive =
+                SourceArchive::try_new_hashchecked(&self.id(), &path, &url, &self.info.cksum)?;
             self.archive.set(archive).unwrap();
             self.load_archive(dir)
         }
     }
-
-    //     fn load_cargo_dir(&self, dir: &impl AsRef<std::path::Path>) -> Result<&Path, Self::Error> {
-    //         let archive_path = self.load_archive(dir);
-    //
-    //         takopack_core::tarball::extract_tar_gz(&archive, &dir)?;
-    //
-    //         todo!()
-    //     }
 
     fn name(&self) -> &str {
         &self.info.name
