@@ -14,15 +14,33 @@ impl CargoDir {
 
         Self {
             dir_path: dir.as_ref().into(),
-            manifest_path: manifest_path,
+            manifest_path,
         }
     }
 
     pub fn get_metadata(&self, features: CargoOpt) -> Result<Metadata, Error> {
-        let mut cmd = MetadataCommand::new();
-        cmd.manifest_path(&self.manifest_path).features(features);
+        let mut command = self.command();
+        command.features(features);
+        Ok(command.exec()?)
+    }
 
-        Ok(cmd.exec()?)
+    /// Run `cargo metadata --no-deps`.
+    ///
+    /// This is offline, does not resolve dependencies and does not create
+    /// `Cargo.lock` or `target/` artifacts. `Package` still carries the full
+    /// dependency declarations, targets and feature table.
+    pub fn get_metadata_no_deps(&self) -> Result<Metadata, Error> {
+        let mut command = self.command();
+        command.no_deps();
+        Ok(command.exec()?)
+    }
+
+    fn command(&self) -> MetadataCommand {
+        let mut command = MetadataCommand::new();
+        command
+            .manifest_path(&self.manifest_path)
+            .current_dir(&self.dir_path);
+        command
     }
 }
 
