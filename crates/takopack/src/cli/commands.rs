@@ -12,6 +12,7 @@ use takopack_rust::{
 };
 
 use super::options::{Cli, Opt};
+use super::{output, spec};
 
 pub fn run() {
     env_logger::init();
@@ -74,11 +75,19 @@ fn real_main() -> Result<i32> {
                 Ok(0)
             }
         },
+        Spec { args } => {
+            spec::run(args)?;
+            Ok(0)
+        }
+        Output { args } => {
+            output::run(args)?;
+            Ok(0)
+        }
         Py(py_opt) => match py_opt {
             PythonSubcommands::Package { name, version, .. } => {
                 let package = PypiFetcher::new(&name, version.as_deref()).fetch().unwrap();
 
-                package.render(&Path::new(".")).unwrap();
+                package.render(Path::new(".")).unwrap();
 
                 Ok(0)
             }
