@@ -3,6 +3,9 @@ use clap::{Parser, Subcommand, builder::Styles, builder::styling::AnsiColor};
 use takopack_python::cli::PythonSubcommands;
 use takopack_rust::RustSubcommands;
 
+use super::output::OutputArgs;
+use super::spec::SpecArgs;
+
 const CLI_STYLE: Styles = Styles::styled()
     .header(AnsiColor::Yellow.on_default())
     .usage(AnsiColor::Green.on_default())
@@ -26,4 +29,14 @@ pub enum Opt {
     /// Python package operations
     #[command(subcommand)]
     Py(PythonSubcommands),
+    /// Render the RPM spec for a Rust crate to stdout
+    Spec {
+        #[command(flatten)]
+        args: SpecArgs,
+    },
+    /// Print the curated Output for a Rust crate
+    Output {
+        #[command(flatten)]
+        args: OutputArgs,
+    },
 }
