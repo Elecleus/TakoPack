@@ -1,8 +1,9 @@
 //! Loading pipeline: source archive -> extracted manifest -> parsed metadata.
 //!
 //! [`Process`] owns a [`CargoSource`], loads and extracts it into the caller
-//! provided base directory, asks cargo for metadata, parses that metadata with the internal metadata parser and projects it into a downstream-facing
-//! [`Output`].
+//! provided base directory, asks cargo for metadata, parses that metadata with
+//! the internal metadata parser and projects it into a downstream-facing
+//! [`Output`]. Package selection is left to callers through [`Output`].
 
 use std::{
     cell::OnceCell,
@@ -12,11 +13,11 @@ use std::{
 use crate::cargo::{
     cargo_dir::CargoDir,
     metadata,
-    output::{Output, OutputPackage},
-    source::CargoSource,
+    output::Output,
+    source::{Archive, CargoSource},
 };
 
-/// Loading pipeline for one crate source.
+/// Loading pipeline for one source archive.
 #[derive(Debug)]
 pub struct Process<S>
 where
@@ -50,29 +51,28 @@ where
     ///
     /// The first successful call returns the output; later calls return the
     /// same output without doing the work again.
-    pub fn load(&mut self) -> Result<&Output, Error>
-    where
-        S::Error: std::error::Error + Send + Sync + 'static,
-    {
+    pub fn load(&mut self) -> Result<&Output, Error> {
         if let Some(output) = self.output.get() {
             return Ok(output);
         }
 
+        std::fs::create_dir_all(&self.base_path)?;
+
+        let archive_path = self.base_path.join("source.archive");
+        let extract_dir = self.base_path.join("extracted");
+
         let archive = self
             .source
-            .load_archive(&self.base_path)
-            .map_err(|error| Error::Source(Box::new(error)))?
-            .clone();
+            .fetch(&archive_path)
+            .map_err(|error| Error::Source(Box::new(error)))?;
+        let extracted = archive
+            .extract(&extract_dir)
+            .map_err(|error| Error::Archive(Box::new(error)))?;
 
-        let manifest_path = archive.extract()?;
-        let cargo_dir = CargoDir::new(
-            manifest_path
-                .parent()
-                .expect("SourceArchive::extract returns a manifest path"),
-        );
+        let cargo_dir = CargoDir::new(extracted.root);
         let raw_metadata = cargo_dir.get_metadata_no_deps()?;
         let metadata = metadata::from_metadata(&raw_metadata)?;
-        let output = Output::new(metadata, archive);
+        let output = Output::new(metadata, archive.metadata().clone());
 
         self.output.set(output).expect("output cell is empty");
         Ok(self.output.get().expect("output was just set"))
@@ -81,23 +81,6 @@ where
     /// The downstream output produced by [`Self::load`].
     pub fn output(&self) -> Result<&Output, Error> {
         self.output.get().ok_or(Error::NotLoaded)
-    }
-
-    /// The package corresponding to this process's source.
-    ///
-    /// The package is selected by the source's crate name. When the extracted
-    /// workspace contains exactly one package, that package is returned even
-    /// if the names differ.
-    pub fn package(&self) -> Result<&OutputPackage, Error> {
-        let output = self.output()?;
-        let name = self.source.name();
-
-        output
-            .package(name)
-            .or_else(|| (output.packages.len() == 1).then(|| &output.packages[0]))
-            .ok_or_else(|| Error::PackageNotFound {
-                name: name.to_owned(),
-            })
     }
 }
 
@@ -108,15 +91,12 @@ pub enum Error {
     NotLoaded,
     /// The source archive could not be loaded.
     Source(Box<dyn std::error::Error + Send + Sync + 'static>),
+    /// The source archive could not be extracted.
+    Archive(Box<dyn std::error::Error + Send + Sync + 'static>),
     /// `cargo metadata` could not be obtained.
     CargoDir(crate::cargo::cargo_dir::Error),
     /// Cargo metadata could not be parsed.
     Metadata(String),
-    /// The source's package is not present in the extracted workspace.
-    PackageNotFound {
-        /// The crate name reported by the source.
-        name: String,
-    },
     /// A filesystem operation failed.
     Io(std::io::Error),
 }
@@ -126,14 +106,9 @@ impl std::fmt::Display for Error {
         match self {
             Self::NotLoaded => formatter.write_str("process has not been loaded yet"),
             Self::Source(error) => write!(formatter, "failed to load source: {error}"),
+            Self::Archive(error) => write!(formatter, "failed to extract source archive: {error}"),
             Self::CargoDir(error) => write!(formatter, "failed to read cargo metadata: {error:?}"),
             Self::Metadata(error) => write!(formatter, "failed to parse cargo metadata: {error}"),
-            Self::PackageNotFound { name } => {
-                write!(
-                    formatter,
-                    "no package named {name:?} in the loaded workspace"
-                )
-            }
             Self::Io(error) => write!(formatter, "i/o error: {error}"),
         }
     }
@@ -142,7 +117,7 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Source(error) => Some(error.as_ref()),
+            Self::Source(error) | Self::Archive(error) => Some(error.as_ref()),
             Self::Io(error) => Some(error),
             _ => None,
         }
@@ -176,30 +151,24 @@ mod tests {
     use flate2::write::GzEncoder;
     use tar::{Builder, Header};
 
-    use crate::cargo::source::SourceArchive;
+    use crate::cargo::source::{ArchiveMetadata, Error as SourceError, TarGzArchive};
 
     use super::*;
 
     #[derive(Debug)]
     struct FakeSource {
-        archive: SourceArchive,
-        name: String,
-        version: String,
+        archive_path: PathBuf,
+        url: String,
     }
 
     impl CargoSource for FakeSource {
-        type Error = std::io::Error;
+        type Error = SourceError;
+        type Archive = TarGzArchive;
 
-        fn name(&self) -> &str {
-            &self.name
-        }
-
-        fn version(&self) -> &str {
-            &self.version
-        }
-
-        fn load_archive(&self, _dir: &impl AsRef<Path>) -> Result<&SourceArchive, Self::Error> {
-            Ok(&self.archive)
+        fn fetch(&self, destination: &Path) -> Result<Self::Archive, Self::Error> {
+            std::fs::copy(&self.archive_path, destination)?;
+            let metadata = ArchiveMetadata::try_new(destination, Some(self.url.clone()))?;
+            Ok(TarGzArchive::new(metadata))
         }
     }
 
@@ -256,27 +225,18 @@ path = "lib.rs"
 
         let dir = tempfile::tempdir().unwrap();
         let archive_path = make_crate(dir.path());
-        let archive = SourceArchive::try_new(
-            "demo-0.1.0",
-            &archive_path,
-            "https://example.com/demo-0.1.0.crate",
-        )
-        .unwrap();
         let source = FakeSource {
-            archive,
-            name: "demo".to_owned(),
-            version: "0.1.0".to_owned(),
+            archive_path,
+            url: "https://example.com/demo-0.1.0.crate".to_owned(),
         };
 
         let mut process = Process::from(source, dir.path());
-        assert!(matches!(process.package(), Err(Error::NotLoaded)));
 
         {
             let output = process.load().unwrap();
             assert_eq!(output.packages.len(), 1);
             assert_eq!(output.packages[0].name, "demo");
             assert_eq!(output.source.checksum.len(), 64);
-            assert_eq!(process.package().unwrap().name, "demo");
             assert_eq!(process.output().unwrap().packages[0].name, "demo");
         }
 

@@ -42,9 +42,12 @@ fn main() -> Result<()> {
 
 fn print_output(output: &Output) {
     println!("workspace: {}", output.workspace_root.display());
-    println!("archive:   {}", output.source.id);
+    println!("archive:   {}", output.source.path.display());
     println!("sha256:    {}", output.source.checksum);
-    println!("url:       {}", output.source.url);
+    println!(
+        "url:       {}",
+        output.source.url.as_deref().unwrap_or("(none)")
+    );
 
     for package in &output.packages {
         println!();
@@ -77,7 +80,10 @@ fn print_output(output: &Output) {
         }
 
         for feature in &package.features {
-            println!("  feature {:?}: requires {:?}", feature.name, feature.features);
+            println!(
+                "  feature {:?}: requires {:?}",
+                feature.name, feature.features
+            );
             for dependency in &feature.dependencies {
                 println!(
                     "    {} kind={:?} features={:?} range={:?}",

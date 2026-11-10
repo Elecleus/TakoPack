@@ -1,17 +1,17 @@
 //! First RPM spec integration for the new `cargo::Output` pipeline.
 //!
-//! The command resolves a crates.io crate, loads it through
-//! `takopack_rust::cargo::Process` and renders a spec to stdout. Writing the
-//! spec to disk and the remaining RPM packaging work come later.
+//! Source selection lives in the CLI; this entry point accepts any
+//! [`CargoSource`], loads it through `takopack_rust::cargo::Process` and
+//! renders a spec to stdout. Writing the spec to disk and the remaining RPM
+//! packaging work come later.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
-use clap::Args;
 use semver::Version;
 use takopack_core::errors::Result;
 use takopack_core::util::calculate_compat_version;
-use takopack_rust::cargo::source::crates_io::FromCratesIoBuilder;
+use takopack_rust::cargo::source::CargoSource;
 use takopack_rust::cargo::{Output, OutputDependency, OutputFeature, OutputPackage, Process};
 
 use super::output::{dependency_capabilities, normalize_feature_name, normalize_name};
@@ -24,41 +24,36 @@ const SPDX_HEADER: &str = "\
 # SPDX-License-Identifier: MulanPSL-2.0
 ";
 
-const SOURCE_LINE: &str = "Source:         https://static.crates.io/crates/%{crate_name}/%{full_version}/download#/%{name}-%{version}.tar.gz";
 const BASE_REQUIRES: &str = "Requires:       crate(%{pkgname}) = %{version}";
 const BASE_PROVIDES: &str = "Provides:       crate(%{pkgname}) = %{version}";
 const FILES_SECTION: &str = "\
 %files
 %{_datadir}/cargo/registry/%{crate_name}-%{version}/";
 
-/// Arguments for `takopack spec`.
-#[derive(Debug, Clone, Args)]
-pub struct SpecArgs {
-    /// Name of the crate on crates.io.
-    #[arg(value_name = "CRATE")]
-    pub crate_name: String,
-    /// Version to render; defaults to the latest stable release.
-    #[arg(value_name = "VERSION")]
-    pub version: Option<String>,
-}
-
-/// Resolve a crate, load its metadata and print the generated spec.
-pub fn run(args: SpecArgs) -> Result<()> {
+/// Load `source` and print one generated spec per workspace package.
+pub fn run<S>(source: S) -> Result<()>
+where
+    S: CargoSource,
+{
     let tempdir = TempDir::with_prefix("takopack-spec-")?;
-
-    let mut builder = FromCratesIoBuilder::new(args.crate_name);
-    if let Some(version) = args.version {
-        builder.version(version);
-    }
-    let source = builder.resolve()?;
 
     let mut process = Process::from(source, tempdir.path());
     process.load()?;
     let output = process.output()?;
-    let package = process.package()?;
 
-    print!("{}", render_spec(output, package));
+    print!("{}", render_specs(output));
     Ok(())
+}
+
+fn render_specs(output: &Output) -> String {
+    let mut specs = String::new();
+    for (index, package) in output.packages.iter().enumerate() {
+        if index > 0 {
+            specs.push('\n');
+        }
+        specs.push_str(&render_spec(output, package));
+    }
+    specs
 }
 
 fn render_spec(output: &Output, package: &OutputPackage) -> String {
@@ -96,7 +91,7 @@ fn render_spec(output: &Output, package: &OutputPackage) -> String {
     writeln!(spec, "License:        {license}").unwrap();
     writeln!(spec, "URL:            {url}").unwrap();
     writeln!(spec, "#!RemoteAsset:  sha256:{}", output.source.checksum).unwrap();
-    writeln!(spec, "{SOURCE_LINE}").unwrap();
+    writeln!(spec, "{}", source_line(output)).unwrap();
     writeln!(spec, "BuildArch:      noarch").unwrap();
     writeln!(spec, "BuildSystem:    rustcrates").unwrap();
     writeln!(spec).unwrap();
@@ -183,6 +178,14 @@ fn render_spec(output: &Output, package: &OutputPackage) -> String {
     writeln!(spec, "%autochangelog").unwrap();
 
     spec
+}
+
+/// Format the archive source line for the spec.
+fn source_line(output: &Output) -> String {
+    format!(
+        "Source:         {}",
+        output.source.url.as_deref().unwrap_or("FIXME")
+    )
 }
 
 /// Derive the feature-subpackage summary prefix from the package description.
@@ -334,7 +337,7 @@ fn merge_features(features: &[OutputFeature]) -> Vec<FeatureSpec<'_>> {
 mod tests {
     use std::path::PathBuf;
 
-    use takopack_rust::cargo::source::SourceArchive;
+    use takopack_rust::cargo::source::ArchiveMetadata;
     use takopack_rust::cargo::{DependencyKind, DependencySource};
 
     use super::*;
@@ -461,11 +464,10 @@ mod tests {
 
     fn output() -> Output {
         Output {
-            source: SourceArchive {
-                id: "serde-1.0.229".to_owned(),
+            source: ArchiveMetadata {
                 path: PathBuf::from("/tmp/serde-1.0.229.crate"),
                 checksum: "deadbeef".to_owned(),
-                url: "https://static.crates.io/crates/serde/serde-1.0.229.crate".to_owned(),
+                url: Some("https://static.crates.io/crates/serde/serde-1.0.229.crate".to_owned()),
             },
             workspace_root: PathBuf::from("/tmp/serde-1.0.229"),
             packages: vec![package()],
@@ -481,6 +483,11 @@ mod tests {
         assert!(spec.contains("Version:        1.0.229"));
         assert!(spec.contains("URL:            https://serde.rs"));
         assert!(spec.contains("#!RemoteAsset:  sha256:deadbeef"));
+        assert!(
+            spec.contains(
+                "Source:         https://static.crates.io/crates/serde/serde-1.0.229.crate"
+            )
+        );
         assert!(spec.contains("BuildRequires:  rust-rpm-macros"));
 
         assert!(spec.contains("Requires:       crate(serde-core-1/result) >= 1.0.229"));
@@ -503,5 +510,31 @@ mod tests {
         assert!(!spec.contains("%package     -n %{name}+derive"));
         assert!(spec.contains("%files"));
         assert!(spec.contains("%autochangelog"));
+    }
+
+    #[test]
+    fn renders_one_spec_per_workspace_package() {
+        let mut output = output();
+        let mut second = output.packages[0].clone();
+        second.name = "serde_core".to_owned();
+        output.packages.push(second);
+
+        let specs = render_specs(&output);
+        assert_eq!(specs.matches("Name:           rust-serde-1").count(), 1);
+        assert_eq!(
+            specs.matches("Name:           rust-serde-core-1").count(),
+            1
+        );
+        assert_eq!(specs.matches("%description\n").count(), 2);
+    }
+
+    #[test]
+    fn uses_the_actual_url_for_a_remote_source() {
+        let mut output = output();
+        output.source.url = Some("https://example.com/demo-0.1.0.tar.gz".to_owned());
+
+        let spec = render_spec(&output, &output.packages[0]);
+        assert!(spec.contains("Source:         https://example.com/demo-0.1.0.tar.gz"));
+        assert!(!spec.contains("https://static.crates.io/crates/%{crate_name}"));
     }
 }

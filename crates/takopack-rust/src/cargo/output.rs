@@ -3,7 +3,7 @@
 //! [`Output`] is the single type downstream packaging code consumes. It only
 //! contains packaging-relevant data:
 //!
-//! - the source archive (identity, URL, checksum, local path);
+//! - the source archive (URL, checksum, local path);
 //! - one entry per workspace package;
 //! - per package: identity, packaging metadata, library/binary shape, the
 //!   base dependency set and one precomputed closure per feature.
@@ -22,7 +22,7 @@ use semver::Version;
 
 use crate::cargo::{
     metadata::{Dependency, FeatureClosure, PackageMetadata, WorkspaceMetadata},
-    source::SourceArchive,
+    source::ArchiveMetadata,
 };
 
 pub use crate::cargo::metadata::{DependencyKind, VersionComparator, VersionOp, VersionRange};
@@ -31,7 +31,7 @@ pub use crate::cargo::metadata::{DependencyKind, VersionComparator, VersionOp, V
 #[derive(Debug, Clone)]
 pub struct Output {
     /// The source archive this output was built from.
-    pub source: SourceArchive,
+    pub source: ArchiveMetadata,
     /// Workspace root as reported by cargo.
     pub workspace_root: PathBuf,
     /// Packages of the workspace, in `workspace_members` order.
@@ -40,7 +40,7 @@ pub struct Output {
 
 impl Output {
     /// Build a downstream output from parsed metadata and its source archive.
-    pub(crate) fn new(metadata: WorkspaceMetadata, source: SourceArchive) -> Self {
+    pub(crate) fn new(metadata: WorkspaceMetadata, source: ArchiveMetadata) -> Self {
         let packages = metadata
             .packages
             .iter()
@@ -430,12 +430,11 @@ mod tests {
         from_metadata(&metadata).expect("workspace should parse")
     }
 
-    fn source_archive() -> SourceArchive {
-        SourceArchive {
-            id: "demo-1.2.3".to_owned(),
+    fn source_archive() -> ArchiveMetadata {
+        ArchiveMetadata {
             path: PathBuf::from("/ws/demo-1.2.3.crate"),
             checksum: "a".repeat(64),
-            url: "https://static.crates.io/crates/demo/demo-1.2.3.crate".to_owned(),
+            url: Some("https://static.crates.io/crates/demo/demo-1.2.3.crate".to_owned()),
         }
     }
 

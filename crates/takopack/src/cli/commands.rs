@@ -6,12 +6,14 @@ use nu_ansi_term::Color::Red;
 use takopack_core::errors::Result;
 use takopack_python::cli::PythonSubcommands;
 use takopack_python::pypi::PypiFetcher;
+use takopack_rust::cargo::source::{crates_io::FromCratesIoBuilder, remote::FromRemoteBuilder};
 use takopack_rust::{
     RustSubcommands,
     cli::{inspect_crate, package_crate},
 };
 
 use super::options::{Cli, Opt};
+use super::source::SourceCommand;
 use super::{output, spec};
 
 pub fn run() {
@@ -75,12 +77,12 @@ fn real_main() -> Result<i32> {
                 Ok(0)
             }
         },
-        Spec { args } => {
-            spec::run(args)?;
+        Spec { source } => {
+            run_spec(source)?;
             Ok(0)
         }
-        Output { args } => {
-            output::run(args)?;
+        Output { source } => {
+            run_output(source)?;
             Ok(0)
         }
         Py(py_opt) => match py_opt {
@@ -93,6 +95,48 @@ fn real_main() -> Result<i32> {
             }
         },
     }
+}
+
+fn run_spec(source: SourceCommand) -> Result<()> {
+    match source {
+        SourceCommand::CratesIo { name, version } => {
+            let mut builder = FromCratesIoBuilder::new(name);
+            if let Some(version) = version {
+                builder.version(version);
+            }
+            spec::run(builder.resolve()?)?;
+        }
+        SourceCommand::Remote { url, checksum } => {
+            let mut builder = FromRemoteBuilder::new(url);
+            if let Some(checksum) = checksum {
+                builder = builder.checksum(checksum);
+            }
+            spec::run(builder.build())?;
+        }
+    }
+
+    Ok(())
+}
+
+fn run_output(source: SourceCommand) -> Result<()> {
+    match source {
+        SourceCommand::CratesIo { name, version } => {
+            let mut builder = FromCratesIoBuilder::new(name);
+            if let Some(version) = version {
+                builder.version(version);
+            }
+            output::run(builder.resolve()?)?;
+        }
+        SourceCommand::Remote { url, checksum } => {
+            let mut builder = FromRemoteBuilder::new(url);
+            if let Some(checksum) = checksum {
+                builder = builder.checksum(checksum);
+            }
+            output::run(builder.build())?;
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

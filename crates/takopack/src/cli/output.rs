@@ -7,35 +7,20 @@
 use std::fmt::Write as _;
 use std::io::{self, IsTerminal};
 
-use clap::Args;
 use nu_ansi_term::Color;
 use semver::Version;
 use takopack_core::errors::Result;
 use takopack_core::util::calculate_compat_version;
-use takopack_rust::cargo::source::crates_io::FromCratesIoBuilder;
+use takopack_rust::cargo::source::CargoSource;
 use takopack_rust::cargo::{DependencyKind, Output, OutputDependency, OutputPackage, Process};
 use tempfile::TempDir;
 
-/// Arguments for `takopack output`.
-#[derive(Debug, Clone, Args)]
-pub struct OutputArgs {
-    /// Name of the crate on crates.io.
-    #[arg(value_name = "CRATE")]
-    pub crate_name: String,
-    /// Version to load; defaults to the latest stable release.
-    #[arg(value_name = "VERSION")]
-    pub version: Option<String>,
-}
-
-/// Resolve a crate, load its metadata and print the formatted `Output`.
-pub fn run(args: OutputArgs) -> Result<()> {
+/// Load `source` and print the formatted [`Output`](takopack_rust::cargo::Output).
+pub fn run<S>(source: S) -> Result<()>
+where
+    S: CargoSource,
+{
     let tempdir = TempDir::with_prefix("takopack-output-")?;
-
-    let mut builder = FromCratesIoBuilder::new(args.crate_name);
-    if let Some(version) = args.version {
-        builder.version(version);
-    }
-    let source = builder.resolve()?;
 
     let mut process = Process::from(source, tempdir.path());
     process.load()?;
@@ -56,9 +41,19 @@ fn render(output: &Output, color: bool) -> String {
     writeln!(out).unwrap();
 
     writeln!(out, "{}", bold("SOURCE", Color::Cyan, color)).unwrap();
-    source_field(&mut out, color, "archive", &output.source.id);
+    source_field(
+        &mut out,
+        color,
+        "archive",
+        &output.source.path.display().to_string(),
+    );
     source_field(&mut out, color, "sha256", &output.source.checksum);
-    source_field(&mut out, color, "url", &output.source.url);
+    source_field(
+        &mut out,
+        color,
+        "url",
+        output.source.url.as_deref().unwrap_or("(none)"),
+    );
     source_field(
         &mut out,
         color,
@@ -377,7 +372,7 @@ fn dependency_features(dependency: &OutputDependency) -> Vec<Option<String>> {
 mod tests {
     use std::path::PathBuf;
 
-    use takopack_rust::cargo::source::SourceArchive;
+    use takopack_rust::cargo::source::ArchiveMetadata;
     use takopack_rust::cargo::{DependencySource, OutputFeature};
 
     use super::*;
@@ -467,11 +462,10 @@ mod tests {
         };
 
         Output {
-            source: SourceArchive {
-                id: "serde-1.0.229".to_owned(),
+            source: ArchiveMetadata {
                 path: PathBuf::from("/tmp/serde-1.0.229.crate"),
                 checksum: "deadbeef".to_owned(),
-                url: "https://static.crates.io/crates/serde/serde-1.0.229.crate".to_owned(),
+                url: Some("https://static.crates.io/crates/serde/serde-1.0.229.crate".to_owned()),
             },
             workspace_root: PathBuf::from("/tmp/serde-1.0.229"),
             packages: vec![package],
