@@ -397,7 +397,7 @@ mod tests {
             lower_bound: Some(version(lower_bound)),
             rpm_range: None,
             kind: DependencyKind::Normal,
-            source: DependencySource::Registry,
+            source: DependencySource::CratesIo,
         }
     }
 

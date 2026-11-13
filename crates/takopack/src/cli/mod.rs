@@ -1,3 +1,4 @@
+mod binary;
 mod commands;
 mod options;
 mod output;

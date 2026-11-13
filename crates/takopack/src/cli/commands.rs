@@ -14,7 +14,7 @@ use takopack_rust::{
 
 use super::options::{Cli, Opt};
 use super::source::SourceCommand;
-use super::{output, spec};
+use super::{binary, output, spec};
 
 pub fn run() {
     env_logger::init();
@@ -83,6 +83,14 @@ fn real_main() -> Result<i32> {
         }
         Output { source } => {
             run_output(source)?;
+            Ok(0)
+        }
+        Binary {
+            url,
+            checksum,
+            package,
+        } => {
+            binary::run(url, checksum, package)?;
             Ok(0)
         }
         Py(py_opt) => match py_opt {

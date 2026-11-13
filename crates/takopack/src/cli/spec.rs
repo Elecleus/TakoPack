@@ -181,7 +181,7 @@ fn render_spec(output: &Output, package: &OutputPackage) -> String {
 }
 
 /// Format the archive source line for the spec.
-fn source_line(output: &Output) -> String {
+pub(crate) fn source_line(output: &Output) -> String {
     format!(
         "Source:         {}",
         output.source.url.as_deref().unwrap_or("FIXME")
@@ -193,7 +193,7 @@ fn source_line(output: &Output) -> String {
 /// The RPM header keeps the generic `Rust crate "<name>"` summary; feature
 /// subpackages use the upstream one-line description, matching the old
 /// TakoPack spec output.
-fn package_summary(package: &OutputPackage) -> String {
+pub(crate) fn package_summary(package: &OutputPackage) -> String {
     let Some(description) = package.description.as_deref() else {
         return format!("Rust crate \"{}\"", package.name);
     };
@@ -242,7 +242,7 @@ fn requirement_lines(dependency: &OutputDependency) -> Vec<String> {
         .collect()
 }
 
-fn rpm_version(version: &Version) -> String {
+pub(crate) fn rpm_version(version: &Version) -> String {
     let mut result = format!("{}.{}.{}", version.major, version.minor, version.patch);
     if !version.pre.is_empty() {
         result.push('-');
@@ -362,7 +362,7 @@ mod tests {
             lower_bound: Some(version(lower_bound)),
             rpm_range: None,
             kind: DependencyKind::Normal,
-            source: DependencySource::Registry,
+            source: DependencySource::CratesIo,
         }
     }
 

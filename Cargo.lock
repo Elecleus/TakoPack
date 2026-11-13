@@ -3967,6 +3967,7 @@ dependencies = [
  "cargo-util",
  "cargo-util-schemas",
  "cargo-util-terminal",
+ "cargo_metadata",
  "clap",
  "clap_mangen",
  "dirs",

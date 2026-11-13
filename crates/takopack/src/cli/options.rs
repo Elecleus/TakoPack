@@ -38,4 +38,16 @@ pub enum Opt {
         #[command(subcommand)]
         source: SourceCommand,
     },
+    /// Render a binary RPM spec for a remote workspace
+    Binary {
+        /// Archive URL.
+        #[arg(long, value_name = "URL")]
+        url: String,
+        /// Expected SHA-256 checksum of the archive.
+        #[arg(long, value_name = "SHA256")]
+        checksum: Option<String>,
+        /// Workspace package used for the main package metadata.
+        #[arg(long, value_name = "PACKAGE")]
+        package: Option<String>,
+    },
 }

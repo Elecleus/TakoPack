@@ -1,0 +1,82 @@
+--- yazi.spec
++++ yazi.spec
+@@ -6,7 +6,7 @@
+-Name:           yazi-fm
++Name:           yazi
+ Version:        26.5.6
+ Release:        %autorelease
+-Summary:        Yazi file manager
++Summary:        Blazing fast terminal file manager written in Rust
+ License:        MIT
+ URL:            https://yazi-rs.github.io
+-VCS:            git:https://github.com/sxyazi/yazi
++VCS:            git:https://github.com/sxyazi/yazi.git
+@@ -17,3 +17,10 @@
+-BuildRequires:  rust-rpm-macros
+-BuildRequires:  rust
+-BuildRequires:  cargo
++BuildRequires:  cargo >= 1.95.0
++BuildRequires:  desktop-file-utils
++BuildRequires:  gcc
++BuildRequires:  make
++BuildRequires:  rust >= 1.95.0
++BuildRequires:  rust-rpm-macros
++BuildRequires:  pkgconfig(jemalloc)
++
++Requires:       file
++
+@@ -23,2 +23,4 @@
+ %description
+-Yazi file manager
++Yazi is a terminal file manager written in Rust, based on non-blocking async I/O.
++It provides a fast and customizable file management experience for terminal
++workflows.
+@@ -26,1 +26,5 @@
+ %build -p
++export CARGO_FEATURE_UNPREFIXED_MALLOC_ON_SUPPORTED_PLATFORMS=1
++export JEMALLOC_OVERRIDE=%{_libdir}/libjemalloc.so
++# We need these shell completions to be generated during build
++export YAZI_GEN_COMPLETIONS=1
+@@ -28,10 +28,32 @@
+-%install
+-install -Dm0755 target/release/ya %{buildroot}%{_bindir}/ya
+-install -Dm0755 target/release/yazi %{buildroot}%{_bindir}/yazi
+-install -Dm0755 target/release/yazi-build %{buildroot}%{_bindir}/yazi-build
+-
+-%files
+-%doc README.md
+-%{_bindir}/ya
+-%{_bindir}/yazi
+-%{_bindir}/yazi-build
++%install -a
++install -Dm0755 target/release/yazi %{buildroot}%{_bindir}/yazi
++install -Dm0755 target/release/ya %{buildroot}%{_bindir}/ya
++
++install -Dm0644 yazi-boot/completions/yazi.bash %{buildroot}%{_datadir}/bash-completion/completions/yazi
++install -Dm0644 yazi-cli/completions/ya.bash %{buildroot}%{_datadir}/bash-completion/completions/ya
++install -Dm0644 yazi-boot/completions/yazi.fish %{buildroot}%{_datadir}/fish/vendor_completions.d/yazi.fish
++install -Dm0644 yazi-cli/completions/ya.fish %{buildroot}%{_datadir}/fish/vendor_completions.d/ya.fish
++install -Dm0644 yazi-boot/completions/_yazi %{buildroot}%{_datadir}/zsh/site-functions/_yazi
++install -Dm0644 yazi-cli/completions/_ya %{buildroot}%{_datadir}/zsh/site-functions/_ya
++
++install -Dm0644 assets/yazi.desktop %{buildroot}%{_datadir}/applications/yazi.desktop
++install -Dm0644 assets/logo.png %{buildroot}%{_datadir}/pixmaps/yazi.png
++
++%check
++desktop-file-validate %{buildroot}%{_datadir}/applications/yazi.desktop
++target/release/yazi --version
++target/release/ya --version
++
++%files
++%doc README.md CHANGELOG.md
++%license LICENSE LICENSE-ICONS
++%{_bindir}/ya
++%{_bindir}/yazi
++%{_datadir}/applications/yazi.desktop
++%{_datadir}/bash-completion/completions/ya
++%{_datadir}/bash-completion/completions/yazi
++%{_datadir}/fish/vendor_completions.d/ya.fish
++%{_datadir}/fish/vendor_completions.d/yazi.fish
++%{_datadir}/pixmaps/yazi.png
++%{_datadir}/zsh/site-functions/_ya
++%{_datadir}/zsh/site-functions/_yazi

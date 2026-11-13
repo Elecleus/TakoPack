@@ -193,10 +193,15 @@ pub struct OutputDependency {
 }
 
 /// Where an [`OutputDependency`] comes from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DependencySource {
-    /// A registry dependency.
-    Registry,
+    /// The crates.io registry.
+    CratesIo,
+    /// Another registry.
+    Registry {
+        /// Registry source URL as reported by cargo.
+        url: String,
+    },
     /// A path dependency (typically another workspace member).
     Path,
     /// A git dependency.
@@ -266,7 +271,16 @@ fn dependency_source(dependency: &Dependency) -> DependencySource {
     }
 
     match dependency.source.as_deref() {
-        Some(source) if source.starts_with("registry+") => DependencySource::Registry,
+        Some(source) if source.starts_with("registry+") || source.starts_with("sparse+") => {
+            let url = source.split_once('+').map(|(_, url)| url).unwrap_or(source);
+            if url.contains("crates.io") {
+                DependencySource::CratesIo
+            } else {
+                DependencySource::Registry {
+                    url: url.to_owned(),
+                }
+            }
+        }
         Some(source) if source.starts_with("git+") => DependencySource::Git,
         Some(_) => DependencySource::Other,
         None => DependencySource::Other,
@@ -454,7 +468,7 @@ mod tests {
         assert_eq!(package.base_dependencies[1].source, DependencySource::Path);
         assert_eq!(
             package.base_dependencies[2].source,
-            DependencySource::Registry
+            DependencySource::CratesIo
         );
         assert!(
             package
