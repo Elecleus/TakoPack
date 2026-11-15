@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand, builder::Styles, builder::styling::AnsiColor};
 
 use takopack_python::cli::PythonSubcommands;
@@ -38,13 +40,16 @@ pub enum Opt {
         #[command(subcommand)]
         source: SourceCommand,
     },
-    /// Render a binary RPM spec for a remote workspace
+    /// Render a binary RPM spec for a workspace archive
     Binary {
-        /// Archive URL.
-        #[arg(long, value_name = "URL")]
-        url: String,
-        /// Expected SHA-256 checksum of the archive.
-        #[arg(long, value_name = "SHA256")]
+        /// Remote archive URL.
+        #[arg(long, value_name = "URL", conflicts_with = "path")]
+        url: Option<String>,
+        /// Local archive path.
+        #[arg(long, value_name = "PATH", conflicts_with = "url")]
+        path: Option<PathBuf>,
+        /// Expected SHA-256 checksum for `--url`.
+        #[arg(long, value_name = "SHA256", requires = "url")]
         checksum: Option<String>,
         /// Workspace package used for the main package metadata.
         #[arg(long, value_name = "PACKAGE")]

@@ -6,7 +6,9 @@ use nu_ansi_term::Color::Red;
 use takopack_core::errors::Result;
 use takopack_python::cli::PythonSubcommands;
 use takopack_python::pypi::PypiFetcher;
-use takopack_rust::cargo::source::{crates_io::FromCratesIoBuilder, remote::FromRemoteBuilder};
+use takopack_rust::cargo::source::{
+    FromLocalArchive, crates_io::FromCratesIoBuilder, remote::FromRemoteBuilder,
+};
 use takopack_rust::{
     RustSubcommands,
     cli::{inspect_crate, package_crate},
@@ -87,10 +89,11 @@ fn real_main() -> Result<i32> {
         }
         Binary {
             url,
+            path,
             checksum,
             package,
         } => {
-            binary::run(url, checksum, package)?;
+            binary::run(url, path, checksum, package)?;
             Ok(0)
         }
         Py(py_opt) => match py_opt {
@@ -121,6 +124,9 @@ fn run_spec(source: SourceCommand) -> Result<()> {
             }
             spec::run(builder.build())?;
         }
+        SourceCommand::Local { path } => {
+            spec::run(FromLocalArchive::new(path))?;
+        }
     }
 
     Ok(())
@@ -141,6 +147,9 @@ fn run_output(source: SourceCommand) -> Result<()> {
                 builder = builder.checksum(checksum);
             }
             output::run(builder.build())?;
+        }
+        SourceCommand::Local { path } => {
+            output::run(FromLocalArchive::new(path))?;
         }
     }
 

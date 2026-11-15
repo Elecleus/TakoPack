@@ -1,4 +1,4 @@
-//! Binary RPM spec framework for remote/workspace application sources.
+//! Binary RPM spec framework for workspace application archives (remote or local).
 //!
 //! The registry spec in [`super::spec`] installs normalized crate sources.
 //! This module instead targets workspace applications: one source RPM builds
@@ -11,11 +11,12 @@
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
+use std::path::PathBuf;
 
 use anyhow::{Result, anyhow, bail};
 use semver::Version;
 use takopack_core::util::calculate_compat_version;
-use takopack_rust::cargo::source::remote::FromRemoteBuilder;
+use takopack_rust::cargo::source::{CargoSource, FromLocalArchive, remote::FromRemoteBuilder};
 use takopack_rust::cargo::{DependencySource, Output, OutputPackage, Process};
 use tempfile::TempDir;
 
@@ -29,19 +30,41 @@ const SPDX_HEADER: &str = "\
 # SPDX-License-Identifier: MulanPSL-2.0
 ";
 
-/// Load a remote workspace and print a binary RPM spec skeleton.
-pub fn run(url: String, checksum: Option<String>, package: Option<String>) -> Result<()> {
-    let tempdir = TempDir::with_prefix("takopack-binary-")?;
-
-    let mut builder = FromRemoteBuilder::new(url);
-    if let Some(checksum) = checksum {
-        builder = builder.checksum(checksum);
+/// Load a workspace archive and print a binary RPM spec skeleton.
+pub fn run(
+    url: Option<String>,
+    path: Option<PathBuf>,
+    checksum: Option<String>,
+    package: Option<String>,
+) -> Result<()> {
+    match (url, path) {
+        (Some(url), None) => {
+            let mut builder = FromRemoteBuilder::new(url);
+            if let Some(checksum) = checksum {
+                builder = builder.checksum(checksum);
+            }
+            run_source(builder.build(), package.as_deref())
+        }
+        (None, Some(path)) => {
+            if checksum.is_some() {
+                bail!("--checksum is only valid with --url");
+            }
+            run_source(FromLocalArchive::new(path), package.as_deref())
+        }
+        (Some(_), Some(_)) => bail!("--url and --path are mutually exclusive"),
+        (None, None) => bail!("one of --url or --path is required"),
     }
+}
 
-    let mut process = Process::from(builder.build(), tempdir.path());
+fn run_source<S>(source: S, package: Option<&str>) -> Result<()>
+where
+    S: CargoSource,
+{
+    let tempdir = TempDir::with_prefix("takopack-binary-")?;
+    let mut process = Process::from(source, tempdir.path());
     process.load()?;
     let output = process.output()?;
-    let main = select_main(output, package.as_deref())?;
+    let main = select_main(output, package)?;
     let requirements = build_requires(output)?;
 
     print!("{}", render_binary_spec(output, main, &requirements)?);

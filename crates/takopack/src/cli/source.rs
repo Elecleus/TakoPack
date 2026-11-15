@@ -1,8 +1,10 @@
 //! Source selection for the Rust CLI commands.
 //!
-//! The two sources are represented as an enum instead of optional flags:
-//! crates.io needs a crate name/version, while a remote archive needs a URL
-//! and an optional checksum.
+//! Sources are represented as an enum: crates.io needs a crate name/version,
+//! a remote archive needs a URL and optional checksum, and a local archive
+//! needs a filesystem path.
+
+use std::path::PathBuf;
 
 use clap::Subcommand;
 
@@ -29,5 +31,11 @@ pub enum SourceCommand {
         /// Expected SHA-256 checksum of the archive.
         #[arg(long, value_name = "SHA256")]
         checksum: Option<String>,
+    },
+    /// Use a local archive file.
+    Local {
+        /// Path to the local gzip-compressed tar archive.
+        #[arg(long, value_name = "PATH")]
+        path: PathBuf,
     },
 }

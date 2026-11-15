@@ -1,8 +1,10 @@
 pub mod archive;
 pub mod crates_io;
+pub mod local;
 pub mod remote;
 
 pub use archive::{Archive, ArchiveMetadata, ExtractedSource, TarGzArchive};
+pub use local::FromLocalArchive;
 
 use std::{io, path::Path};
 
